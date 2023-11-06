@@ -1,0 +1,131 @@
+// 1.
+
+CREATE TABLE dokumenty (
+    id NUMBER(12) PRIMARY KEY,
+    dokument CLOB
+);
+
+// 2.
+
+DECLARE
+    tekst CLOB := '';
+BEGIN
+    FOR i IN 1 .. 10000
+    LOOP
+        tekst := tekst || 'Oto tekst. ';
+    END LOOP;
+    
+    INSERT INTO dokumenty VALUES (1, tekst);
+END;
+
+// 3a.
+
+SELECT id, dokument FROM dokumenty;
+
+// 3b.
+
+SELECT id, UPPER(dokument) FROM dokumenty;
+
+// 3c.
+
+SELECT id, LENGTH(dokument) FROM dokumenty;
+
+// 3d.
+
+SELECT id, DBMS_LOB.GETLENGTH(dokument) FROM dokumenty;
+
+// 3e.
+
+SELECT id, SUBSTR(dokument, 5, 1000) FROM dokumenty;
+
+// 3f.
+
+SELECT id, DBMS_LOB.SUBSTR(dokument, 1000, 5) FROM dokumenty;
+
+// 4.
+
+INSERT INTO dokumenty VALUES (2, EMPTY_CLOB());
+
+// 5.
+
+INSERT INTO dokumenty VALUES (3, NULL);
+COMMIT;
+
+// 7.
+
+SET SERVEROUTPUT ON;
+
+DECLARE
+    fils BFILE := BFILENAME('TPD_DIR', 'dokument.txt');
+    lobd clob;
+    doffset integer := 1;
+    soffset integer := 1;
+    langctx integer := 0;
+    warn integer := null;
+BEGIN
+    SELECT dokument INTO lobd FROM dokumenty WHERE id = 2 FOR UPDATE;
+    
+    DBMS_LOB.fileopen(fils, DBMS_LOB.file_readonly);
+    DBMS_LOB.LOADCLOBFROMFILE(lobd, fils, DBMS_LOB.LOBMAXSIZE, doffset, soffset, 0, langctx, warn);
+    DBMS_LOB.FILECLOSE(fils);
+ 
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Status operacji: '||warn);
+
+END;
+
+// 8.
+
+UPDATE dokumenty SET dokument = TO_CLOB(BFILENAME('TPD_DIR', 'dokument.txt'), 0, 'text/xml') WHERE id = 3;
+
+// 9.
+
+SELECT * FROM dokumenty;
+
+// 10.
+
+SELECT id, DBMS_LOB.GETLENGTH(dokument) FROM dokumenty;
+
+// 11.
+
+DROP TABLE dokumenty;
+
+// 12.
+
+CREATE OR REPLACE PROCEDURE CLOB_CENSOR(lobd IN OUT clob, slowo IN VARCHAR2) IS
+    pozycja integer := 1;
+    kropki VARCHAR2(32767) := '';
+BEGIN
+    FOR i IN 1 .. LENGTH(slowo)
+    LOOP
+        kropki := kropki || '.';
+    END LOOP;
+    DBMS_OUTPUT.PUT_LINE('kropki: '|| kropki);
+    LOOP
+        pozycja := DBMS_LOB.INSTR(lobd, slowo, pozycja, 1);
+        DBMS_OUTPUT.PUT_LINE('pozycja: '|| pozycja);
+        IF pozycja = 0 THEN
+            EXIT;
+        END IF;
+        DBMS_LOB.WRITE(lobd, LENGTH(slowo), pozycja, kropki);
+    END LOOP;
+END;
+
+// 13.
+
+CREATE TABLE BIOGRAPHIES AS SELECT * FROM ZTPD.BIOGRAPHIES;
+
+SELECT DBMS_LOB.SUBSTR(bio, 1000, 1) FROM BIOGRAPHIES;
+
+DECLARE
+    lobd clob;
+BEGIN
+    SELECT bio INTO lobd FROM biographies WHERE id = 1 FOR UPDATE;
+    CLOB_CENSOR(lobd, 'Cimrman');
+END;
+
+SELECT DBMS_LOB.SUBSTR(bio, 1000, 1) FROM BIOGRAPHIES;
+
+// 14.
+
+DROP TABLE BIOGRAPHIES;
