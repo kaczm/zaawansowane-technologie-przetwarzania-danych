@@ -1,0 +1,130 @@
+// Cwiczenie 1
+
+// a
+select lpad('-',2*(level-1),'|-') || t.owner||'.'||t.type_name||' (FINAL:'||t.final||
+', INSTANTIABLE:'||t.instantiable||', ATTRIBUTES:'||t.attributes||', METHODS:'||t.methods||')'
+from all_types t
+start with t.type_name = 'ST_GEOMETRY'
+connect by prior t.type_name = t.supertype_name
+ and prior t.owner = t.owner;
+ 
+// b
+select distinct m.method_name
+from all_type_methods m
+where m.type_name like 'ST_POLYGON'
+and m.owner = 'MDSYS'
+order by 1;
+
+// c
+create table MYST_MAJOR_CITIES(
+    FIPS_CNTRY VARCHAR2(2),
+    CITY_NAME VARCHAR2(40),
+    STGEOM ST_POINT
+);
+
+// d
+insert into MYST_MAJOR_CITIES
+select C.FIPS_CNTRY, C.CITY_NAME, TREAT(ST_POINT.FROM_SDO_GEOM(C.GEOM) AS ST_POINT) STGEOM from MAJOR_CITIES C;
+
+// Cwiczenie 2 - definiowanie geometrii
+
+// a
+insert into MYST_MAJOR_CITIES
+values ('PL', 'Szczyrk', ST_POINT(19.036107, 49.718655, 8307));
+
+// Cwiczenie 3 - pobieranie wlasnosci i miar
+
+// a
+create table MYST_COUNTRY_BOUNDARIES(
+    FIPS_CNTRY VARCHAR2(2),
+    CNTRY_NAME VARCHAR2(40),
+    STGEOM ST_MULTIPOLYGON
+);
+
+// b
+insert into MYST_COUNTRY_BOUNDARIES
+select C.FIPS_CNTRY, C.CNTRY_NAME, ST_MULTIPOLYGON(GEOM) from COUNTRY_BOUNDARIES C;
+
+// c
+select B.STGEOM.ST_GEOMETRYTYPE() AS typ_obiekty, COUNT(*) as ILE
+from MYST_COUNTRY_BOUNDARIES B GROUP BY B.STGEOM.ST_GEOMETRYTYPE();
+
+// d
+select B.STGEOM.ST_ISSIMPLE() from MYST_COUNTRY_BOUNDARIES B;
+
+// Cwiczenie 4 - przetwarzanie danych przestrzennych
+
+// a
+select A.cntry_name, count(*) 
+from myst_country_boundaries A, myst_major_cities B
+WHERE a.STGEOM.ST_CONTAINS(b.STGEOM) = 1
+group by A.cntry_name;
+
+// b
+select A.CNTRY_NAME A_NAME, B.CNTRY_NAME B_NAME
+from MYST_COUNTRY_BOUNDARIES A, MYST_COUNTRY_BOUNDARIES B
+where A.STGEOM.ST_TOUCHES(B.STGEOM) = 1 and B.CNTRY_NAME = 'Czech Republic'; 
+
+// c
+select distinct B.CNTRY_NAME, R.NAME
+from MYST_COUNTRY_BOUNDARIES B, RIVERS R
+where B.CNTRY_NAME = 'Czech Republic'
+and ST_LINESTRING(R.GEOM).ST_Crosses(B.STGEOM) = 1
+
+
+// d
+select ROUND(A.STGEOM.ST_AREA() + B.STGEOM.ST_AREA(), 3)
+from MYST_COUNTRY_BOUNDARIES A, MYST_COUNTRY_BOUNDARIES B
+where A.CNTRY_NAME = 'Czech Republic'
+and B.CNTRY_NAME = 'Slovakia';
+
+// e
+select B.STGEOM.ST_DIFFERENCE(ST_GEOMETRY(W.GEOM)) OBIEKT, B.STGEOM.ST_DIFFERENCE(ST_GEOMETRY(W.GEOM)).ST_GEOMETRYTYPE() WEGRY_BEZ
+from MYST_COUNTRY_BOUNDARIES B, WATER_BODIES W
+where B.CNTRY_NAME = 'Hungary' and W.name = 'Balaton';
+
+// Cwiczenie 5 - indeksowanie i przetwarzanie przy uzyciu operatorow SDO_NN i SDO_WITHIN_DISTANCE
+
+// a
+select B.CNTRY_NAME A_NAME, count(*) from MYST_COUNTRY_BOUNDARIES B, MYST_MAJOR_CITIES C
+where SDO_WITHIN_DISTANCE(C.STGEOM, B.STGEOM, 'distance=100 unit=km') = 'TRUE'
+and B.CNTRY_NAME = 'Poland' group by B.CNTRY_NAME; 
+
+explain plan for
+select B.CNTRY_NAME A_NAME, count(*) from MYST_COUNTRY_BOUNDARIES B, MYST_MAJOR_CITIES C
+where SDO_WITHIN_DISTANCE(C.STGEOM, B.STGEOM, 'distance=100 unit=km') = 'TRUE'
+and B.CNTRY_NAME = 'Poland' group by B.CNTRY_NAME; 
+
+select * from table(dbms_xplan.display)
+
+// b
+insert into USER_SDO_GEOM_METADATA
+select 'MYST_MAJOR_CITIES', 'STGEOM', T.DIMINFO, T.SRID
+from ALL_SDO_GEOM_METADATA T
+where T.TABLE_NAME = 'MAJOR_CITIES';
+
+insert into USER_SDO_GEOM_METADATA
+select 'MYST_COUNTRY_BOUNDARIES', 'STGEOM', T.DIMINFO, T.SRID
+from ALL_SDO_GEOM_METADATA T
+where T.TABLE_NAME = 'COUNTRY_BOUNDARIES';
+
+// c
+create index MYST_MAJOR_CITIES_IDX on
+MYST_MAJOR_CITIES(STGEOM)
+indextype IS MDSYS.SPATIAL_INDEX;
+
+create index MYST_COUNTRY_BOUNDARIES_IDX on
+MYST_COUNTRY_BOUNDARIES(STGEOM)
+indextype IS MDSYS.SPATIAL_INDEX;
+
+// d
+select B.CNTRY_NAME A_NAME, count(*) from MYST_COUNTRY_BOUNDARIES B, MYST_MAJOR_CITIES C
+where SDO_WITHIN_DISTANCE(C.STGEOM, B.STGEOM, 'distance=100 unit=km') = 'TRUE'
+and B.CNTRY_NAME = 'Poland' group by B.CNTRY_NAME; 
+
+explain plan for
+select B.CNTRY_NAME A_NAME, count(*) from MYST_COUNTRY_BOUNDARIES B, MYST_MAJOR_CITIES C
+where SDO_WITHIN_DISTANCE(C.STGEOM, B.STGEOM, 'distance=100 unit=km') = 'TRUE'
+and B.CNTRY_NAME = 'Poland' group by B.CNTRY_NAME; 
+
+select * from table(dbms_xplan.display)
