@@ -1,0 +1,69 @@
+// a.
+
+CREATE TABLE FIGURY (
+    ID number(1) PRIMARY KEY,
+    KSZTALT MDSYS.SDO_GEOMETRY
+);
+
+// b.
+
+// okrag
+INSERT INTO FIGURY VALUES(
+    1,
+    MDSYS.SDO_GEOMETRY(
+    2003,
+    NULL,
+    NULL,
+    MDSYS.SDO_ELEM_INFO_ARRAY(1,1003,4),
+    MDSYS.SDO_ORDINATE_ARRAY(3,5,5,7,7,5)
+    )
+);
+
+// kwadrat
+INSERT INTO FIGURY VALUES(
+    2,
+    MDSYS.SDO_GEOMETRY(
+    2003,
+    NULL,
+    NULL,
+    MDSYS.SDO_ELEM_INFO_ARRAY(1,1003,3),
+    MDSYS.SDO_ORDINATE_ARRAY(1,1,5,5)
+    )
+);
+
+// trzeci ksztalt
+INSERT INTO FIGURY VALUES(
+    3,
+    MDSYS.SDO_GEOMETRY(
+    2002,
+    NULL,
+    NULL,
+    MDSYS.SDO_ELEM_INFO_ARRAY(1,4,2, 1,2,1,  5,2,2),
+    MDSYS.SDO_ORDINATE_ARRAY(3,2, 6,2, 7,3, 8,2, 7,1)
+    )
+);
+
+// c. dodanie nieprawidlowego ksztaltu - kolo przez punkty lezace na prostej
+
+INSERT INTO FIGURY VALUES(
+    4,
+    MDSYS.SDO_GEOMETRY(
+    2003,
+    NULL,
+    NULL,
+    MDSYS.SDO_ELEM_INFO_ARRAY(1,1003,4),
+    MDSYS.SDO_ORDINATE_ARRAY(1,0,2,0,3,0)
+    )
+);
+
+// d. zweryfikowanie poprawnosci
+
+SELECT id, SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT(ksztalt, 0.01) from figury;
+
+// e.
+
+DELETE FROM figury where SDO_GEOM.VALIDATE_GEOMETRY_WITH_CONTEXT(ksztalt, 0.01) <> 'TRUE';
+
+// f.
+
+COMMIT;
