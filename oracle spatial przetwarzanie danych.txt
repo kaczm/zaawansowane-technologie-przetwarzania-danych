@@ -1,0 +1,99 @@
+// Cwiczenie 1 - tworzenie wlasnych metadanych i indeksow
+
+// a
+INSERT INTO user_sdo_geom_metadata
+VALUES (
+    'FIGURY',
+    'KSZTALT',
+    MDSYS.SDO_DIM_ARRAY(
+    MDSYS.SDO_DIM_ELEMENT('X', 0, 1000, 0.01),
+    MDSYS.SDO_DIM_ELEMENT('Y', 0, 1000, 0.01) ),
+    null
+);
+
+// b
+SELECT SDO_TUNE.ESTIMATE_RTREE_INDEX_SIZE(3000000,8192,10,2,0) FROM dual;
+
+// c
+create index figury_idx
+on figury(ksztalt)
+INDEXTYPE IS MDSYS.SPATIAL_INDEX_V2;
+
+// d
+select ID
+from FIGURY
+where SDO_FILTER(KSZTALT,
+SDO_GEOMETRY(2001,null,
+ SDO_POINT_TYPE(3,3,null),
+ null,null)) = 'TRUE';
+// Czy wynik odpowiada rzeczywistości? nie
+// Czym to jest spowodowane? wykorzystuje jedynie pierwszą fazę zapytania
+
+// e
+select ID
+from FIGURY
+where SDO_RELATE(KSZTALT,
+ SDO_GEOMETRY(2001,null,
+ SDO_POINT_TYPE(3,3,null),
+ null,null),
+ 'mask=ANYINTERACT') = 'TRUE';
+//  Czy teraz wynik odpowiada rzeczywistości? tak
+
+// Cwiczenie 2 - wykorzystanie operatorow do przetwarzania danych przestrzennych 
+
+// a
+select A.CITY_NAME as MIASTO, ROUND(SDO_NN_DISTANCE(1), 7) AS ODL from MAJOR_CITIES A, MAJOR_CITIES B
+where SDO_NN(A.GEOM,MDSYS.SDO_GEOMETRY(2001, 8307, B.GEOM.SDO_POINT, B.GEOM.SDO_ELEM_INFO, B.GEOM.SDO_ORDINATES),'sdo_num_res=10 unit=km',1) = 'TRUE'
+and B.CITY_NAME = 'Warsaw' and A.CITY_NAME <> 'Warsaw';
+
+// b
+select A.CITY_NAME as MIASTO from MAJOR_CITIES A, MAJOR_CITIES B
+where SDO_NN(A.GEOM,MDSYS.SDO_GEOMETRY(2001, 8307, B.GEOM.SDO_POINT, B.GEOM.SDO_ELEM_INFO, B.GEOM.SDO_ORDINATES),'distance=100 unit=km',1) = 'TRUE'
+and B.CITY_NAME = 'Warsaw' and A.CITY_NAME <> 'Warsaw';
+
+// c
+select A.CNTRY_NAME as KRAJ, B.CITY_NAME as MIASTO
+from  COUNTRY_BOUNDARIES A, MAJOR_CITIES B
+where SDO_RELATE(B.GEOM, A.GEOM, 'mask=INSIDE') = 'TRUE' AND A.CNTRY_NAME = 'Slovakia';
+
+// d
+
+select A.CNTRY_NAME as PANSTWO, ROUND(SDO_GEOM.SDO_DISTANCE(A.GEOM, B.GEOM, 1, 'unit=km'), 7) as ODL
+from  COUNTRY_BOUNDARIES A, COUNTRY_BOUNDARIES B
+where SDO_RELATE(A.GEOM, SDO_GEOMETRY(2001, 8307, B.GEOM.SDO_POINT, B.GEOM.SDO_ELEM_INFO, B.GEOM.SDO_ORDINATES), 'mask=ANYINTERACT') != 'TRUE' and B.CNTRY_NAME = 'Poland';
+
+// Cwiczenie 3 - wykorzystanie funkcji geometrycznych do przetwarzania danych przestrzennych
+
+// a
+select A.CNTRY_NAME, ROUND(SDO_GEOM.SDO_LENGTH(SDO_GEOM.SDO_INTERSECTION(A.GEOM, B.GEOM, 1), 1, 'unit=km'), 7) as ODLEGLOSC
+from  COUNTRY_BOUNDARIES A, COUNTRY_BOUNDARIES B
+where SDO_FILTER(A.GEOM, B.GEOM) = 'TRUE' and B.CNTRY_NAME = 'Poland';
+
+// b
+select  CNTRY_NAME
+from COUNTRY_BOUNDARIES
+where  SDO_GEOM.SDO_AREA(GEOM) = (select MAX(SDO_GEOM.SDO_AREA(GEOM)) from COUNTRY_BOUNDARIES);
+
+// c
+select ROUND(SDO_GEOM.SDO_AREA(SDO_GEOM.SDO_MBR(SDO_GEOM.SDO_UNION(A.GEOM, B.GEOM, 0.01)), 1, 'unit=SQ_KM'), 5) as SQ_KM
+from  MAJOR_CITIES A, MAJOR_CITIES B
+where  A.CITY_NAME = 'Warsaw' and B.CITY_NAME = 'Lodz';
+
+// d
+select SDO_GEOM.SDO_UNION(A.GEOM, B.GEOM, 0.01).GET_DIMS() || SDO_GEOM.SDO_UNION(A.GEOM, B.GEOM, 0.01).GET_LRS_DIM() || LPAD(SDO_GEOM.SDO_UNION(A.GEOM, B.GEOM, 0.01).GET_GTYPE(), 2, '0') as GTYPE
+from  COUNTRY_BOUNDARIES A, MAJOR_CITIES B
+where A.CNTRY_NAME = 'Poland' AND B.CITY_NAME = 'Prague';
+
+// e
+select B.CITY_NAME, A.CNTRY_NAME
+from COUNTRY_BOUNDARIES A, MAJOR_CITIES B
+where A.CNTRY_NAME = B.CNTRY_NAME
+and SDO_GEOM.SDO_DISTANCE(SDO_GEOM.SDO_CENTROID(A.GEOM, 1), B.GEOM, 1) = (select MIN(SDO_GEOM.SDO_DISTANCE(SDO_GEOM.SDO_CENTROID(A.GEOM, 1), B.GEOM, 1)) from COUNTRY_BOUNDARIES A, MAJOR_CITIES B where A.CNTRY_NAME = B.CNTRY_NAME);
+
+// f
+select NAME, ROUND(SUM(DLUGOSC), 8) as DLUGOSC
+from (select B.NAME, SDO_GEOM.SDO_LENGTH(SDO_GEOM.SDO_INTERSECTION(A.GEOM, B.GEOM, 1), 1, 'unit=KM') as DLUGOSC
+      from  COUNTRY_BOUNDARIES A, RIVERS B
+      where SDO_RELATE(A.GEOM, SDO_GEOMETRY(2001, 8307, B.GEOM.SDO_POINT, B.GEOM.SDO_ELEM_INFO, B.GEOM.SDO_ORDINATES), 'mask=ANYINTERACT') = 'TRUE'
+      and A.CNTRY_NAME = 'Poland')
+group by NAME;
