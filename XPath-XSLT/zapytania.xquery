@@ -1,0 +1,1 @@
+doc('file:///C:/Users/kaczm/Desktop/XPath-XSLT/zesp_prac.xml')//NAZWISKO[text()='BRZEZINSKI']/../../sum(ROW/PLACA_POD)
