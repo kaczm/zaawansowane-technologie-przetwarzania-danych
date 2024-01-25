@@ -1,0 +1,139 @@
+// Oracle Text
+
+// Operator CONTAINS - Podstawy
+// 1
+create table cytaty as select * from ztpd.cytaty;
+
+// 2
+select autor, tekst from cytaty where lower(tekst) like '%optymista%' and lower(tekst) like '%pesymista%';
+
+// 3
+create index cytaty_idx on cytaty(tekst) indextype is ctxsys.context;
+
+// 4
+select autor, tekst from cytaty where contains(tekst, 'optymista and pesymista') > 0;
+
+// 5
+select autor, tekst from cytaty where contains(tekst, 'pesymista not optymista') > 0;
+
+// 6
+select autor, tekst from cytaty where contains(tekst, 'near((pesymista, optymista), 3)') > 0;
+
+// 7
+select autor, tekst from cytaty where contains(tekst, 'near((pesymista, optymista), 10)') > 0;
+
+// 8
+select autor, tekst from cytaty where contains(tekst, 'życi%') > 0;
+
+// 9
+select autor, tekst, score(1) from cytaty where contains(tekst, 'życi%', 1) > 0;
+
+// 10
+select autor, tekst, score(1) as dopasowanie from cytaty where contains(tekst, 'życi%', 1) > 0 order by score(1) desc fetch first 1 row only;
+
+// 11
+select autor, tekst from cytaty where contains(tekst, 'fuzzy(probelm)') > 0;
+
+// 12
+insert into cytaty values(100, 'Bertrand Russel', 'To smutne, że głupcy są tacy pewni siebie, a ludzie rozsądni tacy pełni wątpliwości.');
+commit;
+
+// 13
+select autor, tekst from cytaty where contains(tekst, 'głupcy') > 0;
+
+// 14
+select * from dr$cytaty_idx$i where token_text = 'GŁUPCY';
+
+// 15
+drop index cytaty_idx;
+create index cytaty_idx on cytaty(tekst) indextype is ctxsys.context;
+
+// 16
+select * from dr$cytaty_idx$i where token_text = 'GŁUPCY';
+select autor, tekst from cytaty where contains(tekst, 'głupcy') > 0;
+
+// 17
+drop index cytaty_idx;
+drop table cytaty;
+
+// Zaawansowane indeksowanie i wyszukiwanie
+// 1
+create table quotes as select * from ztpd.quotes;
+
+// 2
+create index quotes_idx on quotes(text) indextype is ctxsys.context;
+
+// 3
+select * from quotes where contains(text, 'work') > 0;
+select * from quotes where contains(text, '$work') > 0;
+select * from quotes where contains(text, 'working') > 0;
+select * from quotes where contains(text, '$working') > 0;
+
+// 4
+select * from quotes where contains(text, 'it') > 0;
+
+// 5
+select * from CTX_STOPLISTS;
+
+// 6
+select * from CTX_STOPWORDS;
+
+// 7
+drop index quotes_idx;
+create index quotes_idx on quotes(text) indextype is ctxsys.context parameters ('stoplist CTXSYS.EMPTY_STOPLIST');
+
+// 8
+select * from quotes where contains(text, 'it') > 0;
+
+// 9
+select * from quotes where contains(text, 'fool and humans') > 0;
+
+// 10
+select * from quotes where contains(text, 'fool and computer') > 0;
+
+// 11
+select * from quotes where contains(text, '(fool and humans) within sentence') > 0;
+
+// 12 
+drop index quotes_idx;
+
+// 13
+begin
+    ctx_ddl.create_section_group('nullgroup', 'NULL_SECTION_GROUP');
+    ctx_ddl.add_special_section('nullgroup', 'SENTENCE');
+    ctx_ddl.add_special_section('nullgroup', 'PARAGRAPH');
+end;
+
+// 14
+create index quotes_idx on quotes(text) indextype is ctxsys.context parameters('stoplist CTXSYS.EMPTY_STOPLIST section group nullgroup');
+
+// 15
+select * from quotes where contains(text, '(fool and humans) within sentence') > 0;
+select * from quotes where contains(text, '(fool and computer) within sentence') > 0;
+
+// 16
+select * from quotes where contains(text, 'humans') > 0;
+
+// 17
+drop index quotes_idx;
+
+BEGIN
+    ctx_ddl.create_preference('dashpreference', 'BASIC_LEXER');
+    ctx_ddl.set_attribute('dashpreference', 'printjoins', '-');
+    ctx_ddl.set_attribute ('dashpreference', 'index_text', 'YES');
+END;
+
+create index quotes_idx on quotes(text) indextype is ctxsys.context parameters('stoplist CTXSYS.EMPTY_STOPLIST section group nullgroup lexer dashpreference');
+
+// 18
+select * from quotes where contains(text, 'humans') > 0;
+
+// 19
+select * from quotes where contains(text, 'non\-humans') > 0;
+
+// 20
+drop table quotes;
+begin
+    ctx_ddl.drop_section_group('nullgroup');
+    ctx_ddl.drop_preference('dashpreference');
+end;
